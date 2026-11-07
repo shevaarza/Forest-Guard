@@ -6,23 +6,31 @@ import {
   DailyFireRiskReport,
   FireRiskPrediction,
   SystemAlert,
-  SystemLogEntry,
-  UserRole,
   WeatherData,
 } from '@fire-monitoring/shared';
 import { RuleBasedFireRiskModel } from '@/services/fire-risk.service';
-import { Flame } from 'lucide-react';
 import { DEFAULT_DASHBOARD, type DashboardBootstrap } from '@/lib/dashboard-bootstrap';
-import { AlertsNotificationsModule } from './AlertsNotificationModule';
-import { DailyReportsModule } from './DailyReportsModule';
 import { DashboardKpiSummary } from './DashboardKpiSummary';
-import { FireRiskAnalysisModule } from './FireRiskAnalysisModule';
-import { LiveCamerasModule } from './LiveCamerasModule';
-import { SettingsModule } from './SettingsModule';
-import { SystemLogsModule } from './SystemLogsModule';
-import { WeatherMonitoringModule } from './WeatherMonitoringModule';
+const AlertsNotificationsModule = dynamic(() => import('./modules/AlertsNotificationModule').then(m => m.AlertsNotificationsModule));
+const DailyReportsModule = dynamic(() => import('./modules/DailyReportsModule').then(m => m.DailyReportsModule));
+const FireRiskAnalysisModule = dynamic(() => import('./modules/FireRiskAnalysisModule').then(m => m.FireRiskAnalysisModule));
+const LiveCamerasModule = dynamic(() => import('./modules/LiveCamerasModule').then(m => m.LiveCamerasModule));
+const SettingsModule = dynamic(() => import('./modules/SettingsModule').then(m => m.SettingsModule));
+const SystemLogsModule = dynamic(() => import('./modules/SystemLogsModule').then(m => m.SystemLogsModule));
+const WeatherMonitoringModule = dynamic(() => import('./modules/WeatherMonitoringModule').then(m => m.WeatherMonitoringModule));
 
-type ModuleTab =
+import { Header } from '../layout/Header';
+import { Sidebar } from '../layout/Sidebar';
+import dynamic from 'next/dynamic';
+
+const fireRiskModel = new RuleBasedFireRiskModel();
+
+type MonitoringCenterShellProps = {
+  initialData?: DashboardBootstrap;
+};
+
+export
+  type ModuleTab =
   | 'Overview'
   | 'Weather Monitoring'
   | 'Live Cameras'
@@ -32,29 +40,10 @@ type ModuleTab =
   | 'System Logs'
   | 'Settings';
 
-const MODULES: readonly ModuleTab[] = [
-  'Overview',
-  'Weather Monitoring',
-  'Live Cameras',
-  'Fire Risk Analysis',
-  'Daily Reports',
-  'Alerts & Notifications',
-  'System Logs',
-  'Settings',
-];
-
-const fireRiskModel = new RuleBasedFireRiskModel();
-
-type MonitoringCenterShellProps = {
-  initialData?: DashboardBootstrap;
-};
-
 export default function MonitoringCenterShell({
   initialData,
 }: MonitoringCenterShellProps): React.JSX.Element {
   const dashboard = initialData ?? DEFAULT_DASHBOARD;
-  const [activeModule, setActiveModule] = useState<ModuleTab>('Overview');
-  const [role, setRole] = useState<UserRole>(dashboard.role);
   const [dryDays, setDryDays] = useState<number>(dashboard.dryDays);
   const [weather, setWeather] = useState<WeatherData>(dashboard.weather);
   const [cameras, setCameras] = useState<CameraDevice[]>(dashboard.cameras);
@@ -65,10 +54,11 @@ export default function MonitoringCenterShell({
   const [newCamUrl] = useState<string>(
     'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8'
   );
-  const [alerts, setAlerts] = useState<SystemAlert[]>(dashboard.alerts);
-  const [logs] = useState<SystemLogEntry[]>(dashboard.logs);
+  const logs = dashboard.logs;
   const [reports, setReports] = useState<DailyFireRiskReport[]>(dashboard.reports);
-
+  const [activeModule, setActiveModule] = useState<ModuleTab>('Overview');
+  const [alerts, setAlerts] = useState(dashboard.alerts);;
+  const role = dashboard.role;
   const riskPrediction: Omit<FireRiskPrediction, 'id' | 'predictedAt'> = useMemo(
     () => fireRiskModel.evaluate(weather, dryDays),
     [weather, dryDays]
@@ -219,62 +209,12 @@ export default function MonitoringCenterShell({
 
   return (
     <div className="flex min-h-screen bg-[#0B1220] text-[#F8FAFC]">
-      <aside className="w-64 shrink-0 border-r border-slate-800 bg-[#111827] p-4">
-        <div className="mb-6 flex items-center gap-2.5 px-2">
-          <Flame className="h-6 w-6 text-[#38BDF8]" />
-          <div>
-            <span className="text-sm font-bold tracking-wide text-slate-100">
-              FOREST GUARD
-            </span>
-            <p className="text-[11px] text-slate-400">Monitoring & CCTV Center</p>
-          </div>
-        </div>
 
-        <nav className="space-y-1">
-          {MODULES.map((module: ModuleTab) => (
-            <button
-              key={module}
-              type="button"
-              onClick={() => setActiveModule(module)}
-              className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-xs font-medium transition-colors ${activeModule === module
-                ? 'bg-[#38BDF8]/15 text-[#38BDF8]'
-                : 'text-slate-300 hover:bg-slate-800/60'
-                }`}
-            >
-              <span>{module}</span>
-              {module === 'Alerts & Notifications' && (
-                <span className="rounded-full bg-red-500/20 px-2 py-0.5 text-[10px] text-red-400">
-                  {alerts.filter((alert) => alert.status === 'CREATED').length}
-                </span>
-              )}
-            </button>
-          ))}
-        </nav>
-      </aside>
+      <Sidebar activeModule={activeModule} setActiveModule={setActiveModule} alerts={alerts} />
 
       <div className="flex flex-1 flex-col">
-        <header className="flex items-center justify-between border-b border-slate-800 bg-[#111827] px-6 py-3.5">
-          <div>
-            <h1 className="text-lg font-bold text-slate-100">
-              Fire Risk Monitoring & Live CCTV Dashboard
-            </h1>
-            <p className="text-xs text-slate-400">
-              Data Source:{' '}
-              <span className="font-semibold text-[#38BDF8]">{weather.dataSource}</span> | Last
-              Sync: {new Date(weather.syncedAt).toLocaleTimeString()}
-            </p>
-          </div>
 
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => setRole((currentRole) => (currentRole === 'OPERATOR' ? 'ADMIN' : 'OPERATOR'))}
-              className="rounded border border-slate-700 bg-[#172033] px-3 py-1.5 text-xs font-semibold text-slate-200"
-            >
-              Role: {role}
-            </button>
-          </div>
-        </header>
+        <Header weather={weather} roles={role} />
 
         <main className="flex-1 space-y-6 p-6">
           <DashboardKpiSummary

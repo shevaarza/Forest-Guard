@@ -1,6 +1,6 @@
 import { CameraDevice } from "@fire-monitoring/shared";
 import { Plus } from "lucide-react";
-import { HlsVideoPlayer } from "../camera/HlsVideoPlayer";
+import { HlsVideoPlayer } from "../../camera/HlsVideoPlayer";
 
 export function LiveCamerasModule({
   cameras,
