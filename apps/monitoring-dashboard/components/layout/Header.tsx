@@ -10,7 +10,7 @@ export function Header({ weather, roles }: { weather: WeatherData, roles: UserRo
       <h1 className="text-lg font-bold text-slate-100">
         Fire Risk Monitoring & Live CCTV Dashboard
       </h1>
-      <p className="text-xs text-slate-400">
+      <p className="text-xs text-slate-400" suppressHydrationWarning>
         Data Source:{' '}
         <span className="font-semibold text-[#38BDF8]">{weather.dataSource}</span> | Last
         Sync: {new Date(weather.syncedAt).toLocaleTimeString()}

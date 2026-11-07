@@ -8,9 +8,14 @@ import {
   SystemAlert,
   WeatherData,
 } from '@fire-monitoring/shared';
+import { useRouter, useSearchParams } from 'next/navigation';
+import dynamic from 'next/dynamic';
 import { RuleBasedFireRiskModel } from '@/services/fire-risk.service';
 import { DEFAULT_DASHBOARD, type DashboardBootstrap } from '@/lib/dashboard-bootstrap';
 import { DashboardKpiSummary } from './DashboardKpiSummary';
+import { Header } from '../layout/Header';
+import { Sidebar } from '../layout/Sidebar';
+
 const AlertsNotificationsModule = dynamic(() => import('./modules/AlertsNotificationModule').then(m => m.AlertsNotificationsModule));
 const DailyReportsModule = dynamic(() => import('./modules/DailyReportsModule').then(m => m.DailyReportsModule));
 const FireRiskAnalysisModule = dynamic(() => import('./modules/FireRiskAnalysisModule').then(m => m.FireRiskAnalysisModule));
@@ -19,18 +24,14 @@ const SettingsModule = dynamic(() => import('./modules/SettingsModule').then(m =
 const SystemLogsModule = dynamic(() => import('./modules/SystemLogsModule').then(m => m.SystemLogsModule));
 const WeatherMonitoringModule = dynamic(() => import('./modules/WeatherMonitoringModule').then(m => m.WeatherMonitoringModule));
 
-import { Header } from '../layout/Header';
-import { Sidebar } from '../layout/Sidebar';
-import dynamic from 'next/dynamic';
-
 const fireRiskModel = new RuleBasedFireRiskModel();
 
 type MonitoringCenterShellProps = {
   initialData?: DashboardBootstrap;
+  initialModule?: ModuleTab;
 };
 
-export
-  type ModuleTab =
+export type ModuleTab =
   | 'Overview'
   | 'Weather Monitoring'
   | 'Live Cameras'
@@ -40,9 +41,23 @@ export
   | 'System Logs'
   | 'Settings';
 
+const MODULES: ReadonlyArray<ModuleTab> = [
+  'Overview',
+  'Weather Monitoring',
+  'Live Cameras',
+  'Fire Risk Analysis',
+  'Daily Reports',
+  'Alerts & Notifications',
+  'System Logs',
+  'Settings',
+];
+
 export default function MonitoringCenterShell({
   initialData,
+  initialModule = 'Overview',
 }: MonitoringCenterShellProps): React.JSX.Element {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const dashboard = initialData ?? DEFAULT_DASHBOARD;
   const [dryDays, setDryDays] = useState<number>(dashboard.dryDays);
   const [weather, setWeather] = useState<WeatherData>(dashboard.weather);
@@ -56,13 +71,22 @@ export default function MonitoringCenterShell({
   );
   const logs = dashboard.logs;
   const [reports, setReports] = useState<DailyFireRiskReport[]>(dashboard.reports);
-  const [activeModule, setActiveModule] = useState<ModuleTab>('Overview');
-  const [alerts, setAlerts] = useState(dashboard.alerts);;
+  const [alerts, setAlerts] = useState(dashboard.alerts);
   const role = dashboard.role;
   const riskPrediction: Omit<FireRiskPrediction, 'id' | 'predictedAt'> = useMemo(
     () => fireRiskModel.evaluate(weather, dryDays),
     [weather, dryDays]
   );
+  const rawModule = searchParams.get('module') ?? initialModule;
+  const activeModule: ModuleTab = MODULES.includes(rawModule as ModuleTab)
+    ? (rawModule as ModuleTab)
+    : initialModule;
+
+  const setActiveModule = (module: ModuleTab): void => {
+    const nextParams = new URLSearchParams(searchParams.toString());
+    nextParams.set('module', module);
+    router.push(`/?${nextParams.toString()}`, { scroll: false });
+  };
 
   const handleRegisterCamera = (event: React.FormEvent<HTMLFormElement>): void => {
     event.preventDefault();
