@@ -12,17 +12,24 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { RuleBasedFireRiskModel } from '@/services/fire-risk.service';
 import { DEFAULT_DASHBOARD, type DashboardBootstrap } from '@/lib/dashboard-bootstrap';
+import {
+  acknowledgeAlertAction,
+  generateDailyReportAction,
+  registerCameraAction,
+  triggerExtremeDrySpellAction,
+  updateCameraStateAction,
+} from '@/actions';
 import { DashboardKpiSummary } from './DashboardKpiSummary';
 import { Header } from '../layout/Header';
 import { Sidebar } from '../layout/Sidebar';
 
-const AlertsNotificationsModule = dynamic(() => import('./modules/AlertsNotificationModule').then(m => m.AlertsNotificationsModule));
-const DailyReportsModule = dynamic(() => import('./modules/DailyReportsModule').then(m => m.DailyReportsModule));
-const FireRiskAnalysisModule = dynamic(() => import('./modules/FireRiskAnalysisModule').then(m => m.FireRiskAnalysisModule));
-const LiveCamerasModule = dynamic(() => import('./modules/LiveCamerasModule').then(m => m.LiveCamerasModule));
-const SettingsModule = dynamic(() => import('./modules/SettingsModule').then(m => m.SettingsModule));
-const SystemLogsModule = dynamic(() => import('./modules/SystemLogsModule').then(m => m.SystemLogsModule));
-const WeatherMonitoringModule = dynamic(() => import('./modules/WeatherMonitoringModule').then(m => m.WeatherMonitoringModule));
+const AlertsNotificationsModule = dynamic(() => import('./modules/AlertsNotificationModule').then((m) => m.AlertsNotificationsModule));
+const DailyReportsModule = dynamic(() => import('./modules/DailyReportsModule').then((m) => m.DailyReportsModule));
+const FireRiskAnalysisModule = dynamic(() => import('./modules/FireRiskAnalysisModule').then((m) => m.FireRiskAnalysisModule));
+const LiveCamerasModule = dynamic(() => import('./modules/LiveCamerasModule').then((m) => m.LiveCamerasModule));
+const SettingsModule = dynamic(() => import('./modules/SettingsModule').then((m) => m.SettingsModule));
+const SystemLogsModule = dynamic(() => import('./modules/SystemLogsModule').then((m) => m.SystemLogsModule));
+const WeatherMonitoringModule = dynamic(() => import('./modules/WeatherMonitoringModule').then((m) => m.WeatherMonitoringModule));
 
 const fireRiskModel = new RuleBasedFireRiskModel();
 
@@ -59,24 +66,25 @@ export default function MonitoringCenterShell({
   const router = useRouter();
   const searchParams = useSearchParams();
   const dashboard = initialData ?? DEFAULT_DASHBOARD;
-  const [dryDays, setDryDays] = useState<number>(dashboard.dryDays);
-  const [weather, setWeather] = useState<WeatherData>(dashboard.weather);
-  const [cameras, setCameras] = useState<CameraDevice[]>(dashboard.cameras);
   const [showRegisterModal, setShowRegisterModal] = useState<boolean>(false);
   const [newCamName, setNewCamName] = useState<string>('');
   const [newCamCode, setNewCamCode] = useState<string>('');
   const [newCamLocation, setNewCamLocation] = useState<string>('');
-  const [newCamUrl] = useState<string>(
-    'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8'
-  );
+  const [newCamUrl] = useState<string>('https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8');
+
+  const weather: WeatherData = dashboard.weather;
+  const dryDays = dashboard.dryDays;
+  const cameras: CameraDevice[] = dashboard.cameras;
+  const alerts: SystemAlert[] = dashboard.alerts;
   const logs = dashboard.logs;
-  const [reports, setReports] = useState<DailyFireRiskReport[]>(dashboard.reports);
-  const [alerts, setAlerts] = useState(dashboard.alerts);
+  const reports: DailyFireRiskReport[] = dashboard.reports;
   const role = dashboard.role;
+
   const riskPrediction: Omit<FireRiskPrediction, 'id' | 'predictedAt'> = useMemo(
     () => fireRiskModel.evaluate(weather, dryDays),
     [weather, dryDays]
   );
+
   const rawModule = searchParams.get('module') ?? initialModule;
   const activeModule: ModuleTab = MODULES.includes(rawModule as ModuleTab)
     ? (rawModule as ModuleTab)
@@ -88,144 +96,52 @@ export default function MonitoringCenterShell({
     router.push(`/?${nextParams.toString()}`, { scroll: false });
   };
 
-  const handleRegisterCamera = (event: React.FormEvent<HTMLFormElement>): void => {
+  const handleRegisterCamera = async (event: React.FormEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault();
     if (!newCamName.trim() || !newCamCode.trim()) return;
 
-    const created: CameraDevice = {
-      id: `cam-${Date.now()}`,
-      name: newCamName.trim(),
-      code: newCamCode.trim(),
-      location: newCamLocation.trim() || 'Sector D - Highland Perimeter',
-      status: 'ONLINE',
-      streamStatus: 'PLAYABLE',
-      streamPlayable: true,
-      streamProtocol: 'HLS',
-      streamUrl: newCamUrl.trim(),
-      isDemoStream: true,
-      lastHeartbeatAt: new Date().toISOString(),
-      lastConnectedAt: new Date().toISOString(),
-      errorStatus: 'NONE',
-      errorMessage: null,
-      updatedAt: new Date().toISOString(),
-    };
+    const formData = new FormData();
+    formData.set('name', newCamName.trim());
+    formData.set('code', newCamCode.trim());
+    formData.set('location', newCamLocation.trim() || 'Sector D - Highland Perimeter');
+    formData.set('streamUrl', newCamUrl.trim());
 
-    setCameras((previous) => [created, ...previous]);
+    await registerCameraAction(formData);
     setShowRegisterModal(false);
     setNewCamName('');
     setNewCamCode('');
     setNewCamLocation('');
   };
 
-  const updateCameraState = (
+  const updateCameraState = async (
     code: string,
     nextStatus: 'ONLINE' | 'OFFLINE',
     nextStreamStatus: 'PLAYABLE' | 'UNAVAILABLE'
-  ): void => {
-    setCameras((previous) =>
-      previous.map((camera) => {
-        if (camera.code !== code) return camera;
-        const isPlayable = nextStatus === 'ONLINE' && nextStreamStatus === 'PLAYABLE';
-        return {
-          ...camera,
-          status: nextStatus,
-          streamStatus: nextStatus === 'OFFLINE' ? 'UNAVAILABLE' : nextStreamStatus,
-          streamPlayable: isPlayable,
-          errorStatus:
-            nextStatus === 'OFFLINE'
-              ? 'HARDWARE_FAULT'
-              : isPlayable
-                ? 'NONE'
-                : 'INVALID_MANIFEST',
-          errorMessage:
-            nextStatus === 'OFFLINE'
-              ? 'Camera transitioned to OFFLINE.'
-              : isPlayable
-                ? null
-                : 'Invalid HLS stream (#EXTM3U check failed).',
-          updatedAt: new Date().toISOString(),
-        };
-      })
-    );
+  ): Promise<void> => {
+    await updateCameraStateAction(code, nextStatus, nextStreamStatus);
   };
 
-  const triggerExtremeDrySpell = (): void => {
-    setDryDays(14);
-    setWeather((previous: WeatherData): WeatherData => ({
-      ...previous,
-      temperatureC: 40.5,
-      humidityPct: 19.0,
-      windSpeedKmh: 39.0,
-      uvIndex: 10.5,
-      precipitationMm: 0.0,
-      dataSource: 'DEMO_SIMULATION',
-      isFallback: true,
-      syncedAt: new Date().toISOString(),
-    }));
-
-    const extremeAlert: SystemAlert = {
-      id: `alt-ext-${Date.now()}`,
-      dedupKey: 'FIRE_RISK:EXTREME',
-      title: 'Extreme Fire Susceptibility Detected (Score 96/100)',
-      severity: 'CRITICAL',
-      category: 'FIRE_RISK',
-      status: 'CREATED',
-      occurrenceCount: 1,
-      lastSeenAt: new Date().toISOString(),
-      description:
-        'Heuristic environmental susceptibility reached EXTREME (40.5°C, 19% humidity, 14 dry days).',
-      location: 'Sector A & Sector B',
-      relatedCameraId: null,
-      isRead: false,
-      acknowledged: false,
-      acknowledgedBy: null,
-      acknowledgedAt: null,
-      resolvedAt: null,
-      createdAt: new Date().toISOString(),
-    };
-    setAlerts((previous) => [extremeAlert, ...previous]);
+  const triggerExtremeDrySpell = async (): Promise<void> => {
+    await triggerExtremeDrySpellAction({ weather, dryDays: 14 });
   };
 
-  const acknowledgeAlert = (id: string): void => {
-    setAlerts((previous) =>
-      previous.map((alert) =>
-        alert.id === id
-          ? {
-            ...alert,
-            status: 'ACKNOWLEDGED',
-            acknowledged: true,
-            isRead: true,
-            acknowledgedBy: 'operator-01',
-            acknowledgedAt: new Date().toISOString(),
-          }
-          : alert
-      )
-    );
+  const acknowledgeAlert = async (id: string): Promise<void> => {
+    await acknowledgeAlertAction(id);
   };
 
-  const handleGenerateDailyReport = (): void => {
-    const today = new Date().toISOString().slice(0, 10);
-    const createdReport: DailyFireRiskReport = {
-      id: `rep-${Date.now()}`,
-      reportDate: today,
-      maxTemperatureC: weather.temperatureC,
-      avgWindSpeedKmh: weather.windSpeedKmh,
-      totalPrecipitationMm: weather.precipitationMm,
-      avgHumidityPct: weather.humidityPct,
-      lastRainfallAt: weather.lastRainfallAt,
-      dailyRiskScore: riskPrediction.riskScore,
-      riskClassification: riskPrediction.classification,
-      highestRiskPeriod: '13:30 - 15:30 WIB',
+  const handleGenerateDailyReport = async (): Promise<void> => {
+    await generateDailyReportAction({
+      reportDate: new Date().toISOString().slice(0, 10),
+      weather,
+      riskScore: riskPrediction.riskScore,
+      classification: riskPrediction.classification,
       vulnerableAreas: riskPrediction.vulnerableAreas,
-      riskFactorAnalysis: `Environmental Susceptibility Report generated for ${today}: Risk score ${riskPrediction.riskScore}/100 (${riskPrediction.classification}).`,
+      highestRiskPeriod: '13:30 - 15:30 WIB',
       recommendedActions: [
         'Deploy patrol observation on high-susceptibility sectors.',
         'Confirm HLS stream playability across all online towers.',
       ],
-      recordCount: 8,
-      generatedAt: new Date().toISOString(),
-    };
-    setReports((previous) => [createdReport, ...previous]);
+    });
   };
 
   const onlineCamerasCount = cameras.filter((camera) => camera.status === 'ONLINE').length;
@@ -233,11 +149,9 @@ export default function MonitoringCenterShell({
 
   return (
     <div className="flex min-h-screen bg-[#0B1220] text-[#F8FAFC]">
-
       <Sidebar activeModule={activeModule} setActiveModule={setActiveModule} alerts={alerts} />
 
       <div className="flex flex-1 flex-col">
-
         <Header weather={weather} roles={role} />
 
         <main className="flex-1 space-y-6 p-6">
