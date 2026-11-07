@@ -17,7 +17,7 @@ export function Sidebar({ alerts, activeModule, setActiveModule }: { alerts: Sys
   ];
 
 
-  return <aside data-Component="Sidebar" className="w-64 shrink-0 border-r border-slate-800 bg-[#111827] p-4">
+  return <aside data-component="Sidebar" className="w-64 shrink-0 border-r border-slate-800 bg-[#111827] p-4">
     <div className="mb-6 flex items-center gap-2.5 px-2">
       <Flame className="h-6 w-6 text-[#38BDF8]" />
       <div>

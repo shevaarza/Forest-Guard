@@ -5,7 +5,7 @@ import React, { useState } from 'react';
 export function Header({ weather, roles }: { weather: WeatherData, roles: UserRole }): React.JSX.Element {
   const [role, setRole] = useState<UserRole>(roles);
 
-  return <header className="flex items-center justify-between border-b border-slate-800 bg-[#111827] px-6 py-3.5">
+  return <header data-component="Header" className="flex items-center justify-between border-b border-slate-800 bg-[#111827] px-6 py-3.5">
     <div>
       <h1 className="text-lg font-bold text-slate-100">
         Fire Risk Monitoring & Live CCTV Dashboard
